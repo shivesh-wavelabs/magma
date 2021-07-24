@@ -220,8 +220,10 @@ class PipelinedRpcServicer(pipelined_pb2_grpc.PipelinedServicer):
         except concurrent.futures.TimeoutError:
             logging.error("ActivateFlows request processing timed out")
             deactivate_req = get_deactivate_req(request)
-            self._loop.call_soon_threadsafe(self._deactivate_flows,
-                                            deactivate_req)
+            self._loop.call_soon_threadsafe(
+                self._deactivate_flows,
+                deactivate_req,
+            )
             return ActivateFlowsResult()
 
     def _update_ipv6_prefix_store(self, ipv6_addr: bytes):
@@ -419,7 +421,7 @@ class PipelinedRpcServicer(pipelined_pb2_grpc.PipelinedServicer):
         ip_addr: IPAddress,
         apn_ambr: AggregatedMaximumBitrate,
         policies: List[VersionedPolicy],
-        shard_id: int
+        shard_id: int,
     ) -> ActivateFlowsResult:
         gy_res = self._gy_app.activate_rules(
             imsi, msisdn, uplink_tunnel,
@@ -494,7 +496,7 @@ class PipelinedRpcServicer(pipelined_pb2_grpc.PipelinedServicer):
             )
             if self._service_manager.is_app_enabled(IPFIXController.APP_NAME):
                 self._loop.call_soon_threadsafe(
-                    self._ipfix_app.delete_ue_sample_flow, request.sid.id
+                    self._ipfix_app.delete_ue_sample_flow, request.sid.id,
                 )
 
         rule_ids = [policy.rule_id for policy in request.policies]
@@ -846,11 +848,11 @@ class PipelinedRpcServicer(pipelined_pb2_grpc.PipelinedServicer):
         table_assignments = self._service_manager.get_all_table_assignments()
         return AllTableAssignments(
             table_assignments=[
-            TableAssignment(
-                app_name=app_name, main_table=tables.main_table,
-                scratch_tables=tables.scratch_tables,
-            ) for
-            app_name, tables in table_assignments.items()
+                TableAssignment(
+                    app_name=app_name, main_table=tables.main_table,
+                    scratch_tables=tables.scratch_tables,
+                    ) for
+                app_name, tables in table_assignments.items()
             ],
         )
 
@@ -961,7 +963,8 @@ class PipelinedRpcServicer(pipelined_pb2_grpc.PipelinedServicer):
         """
         self._log_grpc_payload(request)
         if not self._service_manager.is_app_enabled(
-                EnforcementController.APP_NAME):
+                EnforcementController.APP_NAME,
+        ):
             context.set_code(grpc.StatusCode.UNAVAILABLE)
             context.set_details('Service not enabled!')
             return None
@@ -974,6 +977,7 @@ class PipelinedRpcServicer(pipelined_pb2_grpc.PipelinedServicer):
         except concurrent.futures.TimeoutError:
             logging.error("Get Stats request processing timed out")
             return RuleRecordTable()
+
 
 def _retrieve_failed_results(
     activate_flow_result: ActivateFlowsResult,
@@ -1029,7 +1033,7 @@ def _report_enforcement_stats_failures(
 
 def get_deactivate_req(request: ActivateFlowsRequest):
     versioned_policy_ids = [
-        VersionedPolicyID(rule_id = p.rule.id, version=p.version) for
+        VersionedPolicyID(rule_id=p.rule.id, version=p.version) for
         p in request.policies
     ]
     return DeactivateFlowsRequest(
@@ -1040,5 +1044,5 @@ def get_deactivate_req(request: ActivateFlowsRequest):
         remove_default_drop_flows=True,
         uplink_tunnel=request.uplink_tunnel,
         downlink_tunnel=request.downlink_tunnel,
-        policies=versioned_policy_ids
+        policies=versioned_policy_ids,
     )

@@ -33,10 +33,12 @@ class MagmaMatch(object):
     direction.
     """
 
-    def __init__(self, imsi: int = None, direction: Optional[Direction] = None,
-                 rule_num: int = None, rule_version: int = None,
-                 passthrough: int = None, vlan_tag: int = None,
-                 app_id: int = None, proxy_tag: int = None, **kwargs):
+    def __init__(
+        self, imsi: int = None, direction: Optional[Direction] = None,
+        rule_num: int = None, rule_version: int = None,
+        passthrough: int = None, vlan_tag: int = None,
+        app_id: int = None, proxy_tag: int = None, **kwargs
+    ):
         self.imsi = imsi
         self.direction = direction
         self.rule_num = rule_num

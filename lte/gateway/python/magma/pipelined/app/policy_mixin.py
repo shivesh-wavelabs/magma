@@ -53,13 +53,15 @@ class PolicyMixin(metaclass=ABCMeta):
     Mixin class for policy enforcement apps that includes common methods
     used for rule activation/deactivation.
     """
+
     def __init__(self, *args, **kwargs):
         super(PolicyMixin, self).__init__(*args, **kwargs)
         self._datapath = None
         self._rule_mapper = kwargs['rule_id_mapper']
         self._setup_type = kwargs['config']['setup_type']
         self._session_rule_version_mapper = kwargs[
-            'session_rule_version_mapper']
+            'session_rule_version_mapper'
+        ]
         if 'proxy' in kwargs['app_futures']:
             self.proxy_controller_fut = kwargs['app_futures']['proxy']
         else:
@@ -81,11 +83,13 @@ class PolicyMixin(metaclass=ABCMeta):
         if self._datapath is None:
             self.logger.error('Datapath not initialized for adding flows')
             return ActivateFlowsResult(
-                policy_results=[RuleModResult(
-                    rule_id=policy.rule.id,
-                    version=policy.version,
-                    result=RuleModResult.FAILURE,
-                ) for policy in policies],
+                policy_results=[
+                    RuleModResult(
+                        rule_id=policy.rule.id,
+                        version=policy.version,
+                        result=RuleModResult.FAILURE,
+                    ) for policy in policies
+                ],
             )
         policy_results = []
         for policy in policies:
@@ -98,17 +102,22 @@ class PolicyMixin(metaclass=ABCMeta):
             policy_results=policy_results,
         )
 
-    def _remove_he_flows(self, ip_addr: IPAddress, rule_id: str = "",
-                         rule_num: int = -1):
+    def _remove_he_flows(
+        self, ip_addr: IPAddress, rule_id: str = "",
+        rule_num: int = -1,
+    ):
         if self.proxy_controller:
-            self.proxy_controller.remove_subscriber_he_flows(ip_addr, rule_id,
-                                                             rule_num)
+            self.proxy_controller.remove_subscriber_he_flows(
+                ip_addr, rule_id,
+                rule_num,
+            )
 
     def _wait_for_rule_responses(self, imsi, ip_addr, rule, chan):
         def fail(err):
             self.logger.error(
                 "Failed to install rule %s for subscriber %s: %s",
-                rule.id, imsi, err)
+                rule.id, imsi, err,
+            )
             self._deactivate_flow_for_rule(imsi, ip_addr, rule.id)
             return RuleModResult.FAILURE
 
@@ -123,7 +132,7 @@ class PolicyMixin(metaclass=ABCMeta):
 
     def _wait_for_responses(self, chan, response_count):
         def fail(err):
-            #TODO need to rework setup to return all rule specific success/fails
+            # TODO need to rework setup to return all rule specific success/fails
             self.logger.error("Failed to install rule for subscriber: %s", err)
 
         for _ in range(response_count):
@@ -134,10 +143,12 @@ class PolicyMixin(metaclass=ABCMeta):
             if not result.ok():
                 return fail(result.exception())
 
-    def _get_classify_rule_flow_msgs(self, imsi, msisdn: bytes, uplink_tunnel: int, ip_addr, apn_ambr, flow, rule_num,
-                                     priority, qos, hard_timeout, rule_id, app_name,
-                                     app_service_type, next_table, version, qos_mgr,
-                                     copy_table, _, urls: List[str] = None):
+    def _get_classify_rule_flow_msgs(
+        self, imsi, msisdn: bytes, uplink_tunnel: int, ip_addr, apn_ambr, flow, rule_num,
+        priority, qos, hard_timeout, rule_id, app_name,
+        app_service_type, next_table, version, qos_mgr,
+        copy_table, _, urls: List[str] = None,
+    ):
         """
         Install a flow from a rule. If the flow action is DENY, then the flow
         will drop the packet. Otherwise, the flow classifies the packet with
@@ -147,15 +158,20 @@ class PolicyMixin(metaclass=ABCMeta):
         flow_match = flow_match_to_magma_match(flow.match, ip_addr)
         flow_match.imsi = encode_imsi(imsi)
         flow_match_actions, instructions = self._get_action_for_rule(
-            flow, rule_num, imsi, ip_addr, apn_ambr, qos, rule_id, version, qos_mgr)
+            flow, rule_num, imsi, ip_addr, apn_ambr, qos, rule_id, version, qos_mgr,
+        )
         msgs = []
         if app_name:
             # We have to allow initial traffic to pass through, before it gets
             # classified by DPI, flow match set app_id to unclassified
             flow_match.app_id = UNCLASSIFIED_PROTO_ID
             passthrough_actions = flow_match_actions + \
-                [parser.NXActionRegLoad2(dst=SCRATCH_REGS[1],
-                                         value=IGNORE_STATS)]
+                [
+                    parser.NXActionRegLoad2(
+                        dst=SCRATCH_REGS[1],
+                        value=IGNORE_STATS,
+                    ),
+                ]
             msgs.append(
                 flows.get_add_resubmit_current_service_flow_msg(
                     self._datapath,
@@ -166,7 +182,8 @@ class PolicyMixin(metaclass=ABCMeta):
                     priority=Utils.UNCLASSIFIED_ALLOW_PRIORITY,
                     cookie=rule_num,
                     copy_table=copy_table,
-                    resubmit_table=next_table)
+                    resubmit_table=next_table,
+                ),
             )
             flow_match.app_id = get_app_id(
                 PolicyRule.AppName.Name(app_name),
@@ -176,30 +193,38 @@ class PolicyMixin(metaclass=ABCMeta):
         # For DROP flow just send to stats table, it'll get dropped there
         if flow.action == flow.DENY:
             flow_match_actions = flow_match_actions + \
-                [parser.NXActionRegLoad2(dst=SCRATCH_REGS[1],
-                                         value=DROP_FLOW_STATS)]
-            msgs.append(flows.get_add_resubmit_current_service_flow_msg(
-                self._datapath,
-                self.tbl_num,
-                flow_match,
-                flow_match_actions,
-                hard_timeout=hard_timeout,
-                priority=priority,
-                cookie=rule_num,
-                resubmit_table=copy_table)
+                [
+                    parser.NXActionRegLoad2(
+                        dst=SCRATCH_REGS[1],
+                        value=DROP_FLOW_STATS,
+                    ),
+                ]
+            msgs.append(
+                flows.get_add_resubmit_current_service_flow_msg(
+                    self._datapath,
+                    self.tbl_num,
+                    flow_match,
+                    flow_match_actions,
+                    hard_timeout=hard_timeout,
+                    priority=priority,
+                    cookie=rule_num,
+                    resubmit_table=copy_table,
+                ),
             )
         else:
-            msgs.append(flows.get_add_resubmit_current_service_flow_msg(
-                self._datapath,
-                self.tbl_num,
-                flow_match,
-                flow_match_actions,
-                instructions=instructions,
-                hard_timeout=hard_timeout,
-                priority=priority,
-                cookie=rule_num,
-                copy_table=copy_table,
-                resubmit_table=next_table)
+            msgs.append(
+                flows.get_add_resubmit_current_service_flow_msg(
+                    self._datapath,
+                    self.tbl_num,
+                    flow_match,
+                    flow_match_actions,
+                    instructions=instructions,
+                    hard_timeout=hard_timeout,
+                    priority=priority,
+                    cookie=rule_num,
+                    copy_table=copy_table,
+                    resubmit_table=next_table,
+                ),
             )
 
         if self.proxy_controller:
@@ -209,12 +234,15 @@ class PolicyMixin(metaclass=ABCMeta):
 
             proxy_msgs = self.proxy_controller.get_subscriber_he_flows(
                 rule_id, direction, ue_ip, uplink_tunnel, ip_dst, rule_num,
-                urls, imsi, msisdn)
+                urls, imsi, msisdn,
+            )
             msgs.extend(proxy_msgs)
         return msgs
 
-    def _get_action_for_rule(self, flow, rule_num, imsi, ip_addr,
-                             apn_ambr, qos, rule_id, version, qos_mgr):
+    def _get_action_for_rule(
+        self, flow, rule_num, imsi, ip_addr,
+        apn_ambr, qos, rule_id, version, qos_mgr,
+    ):
         """
         Returns an action instructions list to be applied for a specific flow.
         If qos or apn_ambr are set, the appropriate action is returned based
@@ -247,11 +275,14 @@ class PolicyMixin(metaclass=ABCMeta):
                 qos_info = QosInfo(gbr=qos.gbr_dl, mbr=mbr_dl)
 
         if qos_info or ambr:
-            cleanup_rule_func = lambda: self._invalidate_rule_version(imsi,
-                                                                      ip_addr, rule_id)
+            cleanup_rule_func = lambda: self._invalidate_rule_version(
+                imsi,
+                ip_addr, rule_id,
+            )
             action, inst = qos_mgr.add_subscriber_qos(
                 imsi, ip_addr.address.decode('utf8'), ambr, rule_num, d,
-                qos_info, cleanup_rule_func)
+                qos_info, cleanup_rule_func,
+            )
 
             self.logger.debug("adding Actions %s instruction %s ", action, inst)
             if action:
@@ -261,16 +292,20 @@ class PolicyMixin(metaclass=ABCMeta):
                 instructions.append(inst)
 
         actions.extend(
-            [parser.NXActionRegLoad2(dst=RULE_NUM_REG, value=rule_num),
-             parser.NXActionRegLoad2(dst=RULE_VERSION_REG, value=version)
-             ])
+            [
+                parser.NXActionRegLoad2(dst=RULE_NUM_REG, value=rule_num),
+                parser.NXActionRegLoad2(dst=RULE_VERSION_REG, value=version),
+            ],
+        )
         return actions, instructions
 
     # this function is used to schedule the rule removal in rule cleanup.
     def _invalidate_rule_version(self, imsi, ip_addr, rule_id):
-        self.logger.debug("Invalidate rule: imsi: %s ip: %s rule_id %s", imsi,
-                          ip_addr.address.decode('utf8'),
-                          rule_id)
+        self.logger.debug(
+            "Invalidate rule: imsi: %s ip: %s rule_id %s", imsi,
+            ip_addr.address.decode('utf8'),
+            rule_id,
+        )
 
         self._session_rule_version_mapper.save_version(imsi, ip_addr, rule_id, -1)
 
@@ -301,15 +336,17 @@ class PolicyMixin(metaclass=ABCMeta):
                 for policy in policies:
                     msg_list.extend(self._get_policy_flows(imsi, msisdn, uplink_tunnel, ipv6, apn_ambr, policy, shard_id))
 
-
         return {self.tbl_num: msg_list}
 
-    def _get_policy_flows(self, imsi, msisdn, uplink_tunnel, ip_addr, apn_ambr,
-                          policy, shard_id):
+    def _get_policy_flows(
+        self, imsi, msisdn, uplink_tunnel, ip_addr, apn_ambr,
+        policy, shard_id,
+    ):
         msg_list = []
         # As the versions are managed by sessiond, save state here
         self._service_manager.session_rule_version_mapper.save_version(
-            imsi, ip_addr, policy.rule.id, policy.version)
+            imsi, ip_addr, policy.rule.id, policy.version,
+        )
         try:
             if policy.rule.redirect.support == policy.rule.redirect.ENABLED:
                 return msg_list
@@ -338,9 +375,10 @@ class PolicyMixin(metaclass=ABCMeta):
         if self.proxy_controller_fut and self.proxy_controller_fut.done():
             if not self.proxy_controller:
                 self.proxy_controller = self.proxy_controller_fut.result()
-        self.logger.info("Initialized proxy_controller %s",
-                         self.proxy_controller)
-
+        self.logger.info(
+            "Initialized proxy_controller %s",
+            self.proxy_controller,
+        )
 
     @abstractmethod
     def _install_flow_for_rule(self, imsi, msisdn: bytes, uplink_tunnel: int, ip_addr, apn_ambr, rule, version, shard_id: int):
